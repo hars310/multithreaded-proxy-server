@@ -11,5 +11,8 @@ the basic flow of a complete system is
 - > otherwise send to server 
 - > servers returns a response
 - > proxy server gets the response
-- > store it in cache 
+- > store it in cache // I am thinking to use LRU cache 
 - > and return the result to host
+
+
+1. we need a http request parser, for this  I have used a library  written by Matvey Arye. 
