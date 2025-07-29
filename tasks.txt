@@ -1,0 +1,15 @@
+tasks to be done to complete this project
+
+- we will build a multithreaded proxy web server 
+
+the basic flow of a complete system is 
+
+- > host sends a request
+- > proxy server 
+- > check if it is in cache 
+- > if yes return 
+- > otherwise send to server 
+- > servers returns a response
+- > proxy server gets the response
+- > store it in cache 
+- > and return the result to host
