@@ -173,6 +173,10 @@ int main(int argc, char* argv[]){
             perror("error in accept function");
             exit(1);
         }
+        else{
+            connected_socketId[i] = client_socketID;
+            i++;
+        }
     }
 
 
