@@ -84,5 +84,19 @@ int main(int argc, char* argv[]){
         exit(1);
     }
 
-    
+    // in this socket id we pass a socket value that is generated using socket function
+    // here AF_NET(address family: internet) is domain
+    // more sepicfically speaking it will use ipv4 addresses
+    // and we set sock stream as the type beacuse it will represent the stream socket
+    // and uses TCP under the hood for communication
+    // for udp type connection we can use SOCK_DGRAM
+    proxy_socket_Id = socket(AF_INET,SOCK_STREAM,0);
+
+    if(proxy_socket_Id < 0) {
+        perror("Failed to create a socket");
+        exit(1);    
+    }
+
+
+
 }
