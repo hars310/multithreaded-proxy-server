@@ -18,7 +18,6 @@
 
 #define MAX_CLIENTS 16 // setting 16 just randomly
 
-#pragma comment(lib, "Ws2_32.lib")  // Link with Winsock library
 
 // we have to store the request data into cache element
 // this is actually a lru cache list that will contain all our cache request data
@@ -119,6 +118,26 @@ int main(int argc, char* argv[]){
             // If the call fails, print an error message and optionally exit
             perror("setsockopt(SO_REUSEADDR) failed");
             exit(EXIT_FAILURE);
+    }
+
+    // this function will set 0 value to server_addr as in c lang variables get garbage value in definition.
+    // first minor doubt comes is why dont we directly place 0 to it, but it has diff things internally that need to be initialised with 0 as well
+        // server_addr.sin_family = 0;
+        // server_addr.sin_port = 0;
+        // server_addr.sin_addr.s_addr = 0;
+        // and so on...
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT); // converts the port to network byte order
+    server_addr.sin_addr.s_addr = INADDR_ANY;  // server will accept connections from any IP on the machine.
+
+
+    // bind function binds the socket with specific ip addr and port
+    // it tells the os that Whenever data arrives on this port, send it to this socket.
+    // without bind our os will never know which port our socket is using
+    if (bind(proxy_socket_Id, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
+        perror("PORT is unavailable\n");
+        exit(1); 
     }
 
 }
