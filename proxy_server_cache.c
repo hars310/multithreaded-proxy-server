@@ -4,13 +4,21 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <time.h>
+#include <sys/wait.h>
+#include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <time.h>
 
 #define MAX_CLIENTS 16 // setting 16 just randomly
 
+#pragma comment(lib, "Ws2_32.lib")  // Link with Winsock library
 
 // we have to store the request data into cache element
 // this is actually a lru cache list that will contain all our cache request data
@@ -42,3 +50,39 @@ sem_t semaphore;
 // at the same time if some other client tries to write at same time 
 // to avoid this thing we use locks to have control over our data integrity
 pthread_mutex_t lock;
+
+
+int cache_size;
+struct cache_element* head;
+
+int main(int argc, char* argv[]){
+    int client_socketID; 
+    int client_len; // length of address
+    
+    // I used this by my own
+    // this helps to assign addresses to client and server
+    // older method --> struct sockaddr server_addr, client_addr; --> this does not have fields for ip address and port directly
+    // older method was too generic that's why i thought to try for ipv4 addresses
+    struct sockaddr_in server_addr, client_addr;
+
+    
+    // initialisation of semaphore with min and max value
+    sem_init(&semaphore,0, MAX_CLIENTS);
+
+    // thread initialisation
+    pthread_mutex_init(&lock, NULL);
+
+
+    // argc checks how many arguments we have passed in command line
+    // for this we will run our server like this ./server 8080
+    // port number is passes as second element of argument arr
+    if(argc == 2){
+        PORT = atoi(argv[1]);
+    }
+    else{
+        printf("Few arguments passed");
+        exit(1);
+    }
+
+    
+}
