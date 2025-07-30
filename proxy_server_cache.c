@@ -97,6 +97,28 @@ int main(int argc, char* argv[]){
         exit(1);    
     }
 
+    // this reuse will help us to reuse the socket as it will be a global socket
+    int reuse = 1;
 
+    // this setsockopt fn is used to set the socket options like timeouts, buffer sizes, or address reuse.
+    // this setsockopt fn takes 5 parameters (sockfd--> Socket file descriptor, level, optionname, optionvalue, optionlength)
+    // SO_REUSEADDR ->  Allows your socket to reuse the same local address and port, even if they’re in a TIME_WAIT state.
+    // if this setsockopt()<0 --> return error
+    // this setsockopt is a wrapper around a kernel level system call
+    // when we call it
+            // --> it validates the socket descripter
+            // --> Checks if the option is supported for the given level.
+            // --> Applies the option by modifying socket internal configuration.
+    if(setsockopt(
+        proxy_socket_Id, 
+        SOL_SOCKET,
+        SO_REUSEADDR, 
+        (const char*)&reuse, 
+        sizeof(reuse)
+    ) < 0 ){
+            // If the call fails, print an error message and optionally exit
+            perror("setsockopt(SO_REUSEADDR) failed");
+            exit(EXIT_FAILURE);
+    }
 
 }
