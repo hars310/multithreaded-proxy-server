@@ -139,5 +139,19 @@ int main(int argc, char* argv[]){
         perror("PORT is unavailable\n");
         exit(1); 
     }
+    printf("Binding on port %d\n",PORT);
+
+    // listen() converts our bound socket into a listening socket that can accept incoming client connections.
+    // the real life example to understand the code structure or flow is 
+                // socket() → Get a phone.
+                // bind() → Get a phone number and register it.
+                // listen() → Start waiting for incoming calls.
+                // accept() → Pick up a ringing phone call. -> after listening this has to be written
+    int listen_status = listen(proxy_socket_Id,MAX_CLIENTS);
+    if(listen_status<0){
+        perror("Error in listening status. \n");
+        exit(1);
+    }
+
 
 }
