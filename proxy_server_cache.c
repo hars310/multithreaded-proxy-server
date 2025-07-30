@@ -153,5 +153,27 @@ int main(int argc, char* argv[]){
         exit(1);
     }
 
+    int i=0;
+    int connected_socketId[MAX_CLIENTS]; // array to store socket id that are connected
+
+    while(1){
+        // clears client address structure
+        memset((char*)& client_addr,0,sizeof(client_addr));
+        client_len = sizeof(client_addr);
+
+        // Accept an incoming client connection
+        // so question comes in mind if it is running infinite inside while loop
+        // will it slow down the system --> ans is it does not consume unnecessary CPU or memory.
+        // accept() is a blocking system call.
+        // That means the process sits idle (sleeps) until a client actually tries to connect.
+        // No CPU is wasted while waiting — the kernel wakes it up only when a connection comes in.
+        client_socketID  = accept(proxy_socket_Id, (struct sockaddr*)& client_addr, (socklen_t*) &client_len);
+
+        if(client_socketID < 0){
+            perror("error in accept function");
+            exit(1);
+        }
+    }
+
 
 }
