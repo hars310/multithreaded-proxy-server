@@ -17,6 +17,7 @@
 #include <time.h>
 
 #define MAX_CLIENTS 16 // setting 16 just randomly
+#define MAX_BYTES 10*(1<<10) // 2^10
 
 
 // we have to store the request data into cache element
@@ -53,6 +54,64 @@ pthread_mutex_t lock;
 
 int cache_size;
 struct cache_element* head;
+
+// implementation of thread fn to receive 
+void* thread_fn(void* new_socket){
+    // Wait (decrement) the semaphore to limit concurrent client handling
+    // If the semaphore value is 0, this thread will wait until another thread releases it
+    sem_wait(&semaphore);
+
+    // this code is helpful to debug the code later
+    int p;
+    sem_getvalue(&semaphore, &p);
+    printf("Semaphore value is %d\n",p);
+    
+    // first we are getting the socket details in an int ptr 
+    // and then dereferencing to get the actual socket value in socket
+    int* t = (int*) new_socket; 
+    int socket = *t; // setting the socket detail in socket variable
+    
+    
+    int bytes_send_client; // this is the size of data client is sending
+    int len; 
+    // buffer to recieve the client data
+    char* buffer = (char*) calloc(MAX_BYTES, sizeof(char));
+    
+    // this is not needed as we have used calloc but incase we have garbage in buffer thats why;
+    memset(buffer,0,MAX_BYTES);
+    
+    // recieving the client data 
+    bytes_send_client = recv(socket,buffer,MAX_BYTES,0);
+
+
+    while(bytes_send_client>0){
+        len = strlen(buffer);
+        
+        // Check if the end of HTTP headers has not been reached yet
+        if(strstr(buffer,"\r\n\r\n")==NULL){
+            // Receive more data and append it to the end of the buffer
+            bytes_send_client  =recv(socket, buffer + len, MAX_BYTES - len, 0);
+        }else{
+            break;
+        }
+    }
+
+    // this data is to be stored in cache list
+    // this is the next task to be done here
+
+    // Clean up: Free buffer memory
+    free(buffer);
+
+    // Close the socket (important to avoid resource leaks)
+    close(socket);
+
+    // Release the semaphore (increment), allowing another thread to serve a new client
+    sem_post(&semaphore);
+
+    // Exit the thread
+    pthread_exit(NULL);
+
+}
 
 int main(int argc, char* argv[]){
     int client_socketID; 
@@ -177,7 +236,30 @@ int main(int argc, char* argv[]){
             connected_socketId[i] = client_socketID;
             i++;
         }
+
+        // making a ptr to point at the same address of client_addr
+        struct sockaddr_in * client_ptr = &client_addr;
+        
+        // now getting ip addr from the ptr 
+        struct in_addr ip_addr =  client_ptr->sin_addr;
+        
+        // creating a string to set the addr value
+        // the size of this string is 16 with max addr can be 255.255.255.255
+        char str[INET_ADDRSTRLEN];
+
+        // it converts the internal addr to presentation format
+        // converts a binary IP address (used by the system) to a human-readable IP string like "192.168.1.1".
+        inet_ntop(AF_INET, &ip_addr, str, INET_ADDRSTRLEN);
+
+        printf("Client is Connected with port number : %d and ip address: %s",ntohs(client_addr.sin_port),str);
+
+        // now after we have connected with client and got their port and addr details 
+        // create a thread for this client
+        // this thread function is a implementation to receive the client bytes
+        pthread_create(&p_id[i], NULL, thread_fn, (void*)& connected_socketId[i]);
     }
+        
+    close(proxy_socket_Id);
 
 
 }
