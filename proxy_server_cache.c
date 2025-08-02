@@ -96,8 +96,37 @@ void* thread_fn(void* new_socket){
         }
     }
 
-    // this data is to be stored in cache list
-    // this is the next task to be done here
+    // temp_Request is now a new char array in memory — a blank copy of buffer's size.
+    // and copying the buffer each char to temp request in for loop
+    // the reason i have done is simple, to avoid making any changes in original buffer
+    char* temp_Request = (char*)malloc(strlen(buffer)*sizeof(char)+1);
+    for(int i=0;i<strlen(buffer);i++){
+        temp_Request[i] = buffer[i];
+    }
+
+    // now check that temp request in the cache list
+    // if is is present then we can directly fetch the data from thatand send it to the socket
+    struct cache_element* temp = findRequest(temp_Request);
+    if(temp!=NULL){
+        int size = temp->len/sizeof(char);
+        int pos=0;
+        char response[MAX_BYTES];
+        while(pos<size){
+            memset(response,0,MAX_BYTES);
+            for(int i=0;i<MAX_BYTES;i++){
+                // this temp contains the cache data
+                // we are just putting it byte by byte in the response
+                response[i] = temp->data[i];
+                pos++;
+            }
+
+            // after successfully putting all the bytes we are sending this response to socket
+            send(socket, response, MAX_BYTES, 0);
+        }
+        printf("Data retrieved successfully from the cache \n");
+        printf("%s\n\n",response);
+    }
+
 
     // Clean up: Free buffer memory
     free(buffer);
