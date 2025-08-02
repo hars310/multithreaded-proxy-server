@@ -35,6 +35,22 @@ int addNewRequest(char* data, int size, char* url); // add a new request
 struct cache_element* findRequest(char* url); // find a element in this list
 void deleteRequest();  // delete the request data from this list
 
+// this function will be handled later
+int handle_request(int clientSocket,struct ParsedRequest* request, char* temp_Request );
+
+// i used gpt to get this function so that i can send error message if got any error in http status
+void send_error_message(int client_socket, const char* status, const char* message) {
+    char response[1024];
+    snprintf(response, sizeof(response),
+        "HTTP/1.1 %s\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: %ld\r\n"
+        "\r\n"
+        "%s",
+        status, strlen(message), message
+    );
+    send(client_socket, response, strlen(response), 0);
+}
 
 int PORT = 4040; // port no where our proxy will work
 int proxy_socket_Id;  // to maintain the connection we will have to use socket
@@ -126,7 +142,46 @@ void* thread_fn(void* new_socket){
         printf("Data retrieved successfully from the cache \n");
         printf("%s\n\n",response);
     }
+    // if the temp is not in cache list
+    // some data has been received from the client (via recv() earlier).
+    else if(bytes_send_client>0){
+        len = strlen(buffer);
+        // this is the http parsed  library method we initally added in code as "proxy_parse.c"
+        struct ParsedRequest* request = ParsedRequest_create();
+        
+        // this internal method tries to parse
+        if(ParsedRequest_parse(request, buffer, len) < 0 ){
+            printf("Parsing failed");
+        }else{
+            memset(buffer, 0, MAX_BYTES);
+            // we are writing code to handle get request only for now
+            if(!strcmp(request->protocol,"GET")){
+                // if both host and path is present
+                if(request->host && request->path){
 
+                    // this handle_request is to be written but it will forward the request
+                    bytes_send_client = handle_request(socket, request, temp_Request);
+                    if(bytes_send_client==-1){
+                        send_error_message(socket, "500" , "Invalid http request"); 
+                    }
+                }else{
+                    send_error_message(socket, "500", "Internal server error");
+                }
+            }else{
+                printf("For now i have written only code for GET request\n");
+            }
+        }
+        // Free the memory allocated for the ParsedRequest object.
+        ParsedRequest_destroy(request);
+    }
+    else if(bytes_send_client==0)
+    {
+        printf("client is disconnected");
+    }
+
+    // close a socket connection.
+    // SHUT_RDWR both reading and writing will be disabled
+    shutdown(socket, SHUT_RDWR);
 
     // Clean up: Free buffer memory
     free(buffer);
@@ -136,6 +191,9 @@ void* thread_fn(void* new_socket){
 
     // Release the semaphore (increment), allowing another thread to serve a new client
     sem_post(&semaphore);
+    // sem_getvalue(&semaphore,p);
+
+    free(temp_Request);
 
     // Exit the thread
     pthread_exit(NULL);
