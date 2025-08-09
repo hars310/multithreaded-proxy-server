@@ -19,6 +19,11 @@
 #define MAX_CLIENTS 16 // setting 16 just randomly
 #define MAX_BYTES 10*(1<<10) // 2^10
 
+int PORT = 4040; // port no where our proxy will work
+int proxy_socket_Id;  // to maintain the connection we will have to use socket
+pthread_t p_id[MAX_CLIENTS]; // this is the number of threads 
+                            //  for ex -  we can have more than 1 clients who is using this proxy server at same time 
+
 
 // we have to store the request data into cache element
 // this is actually a lru cache list that will contain all our cache request data
@@ -31,12 +36,343 @@ struct cache_element{
 };
 
 // methods present in this cache list
-int addNewRequest(char* data, int size, char* url); // add a new request 
+int addNewRequestinCache(char* data, int size, char* url); // add a new request 
 struct cache_element* findRequest(char* url); // find a element in this list
 void deleteRequest();  // delete the request data from this list
 
-// this function will be handled later
-int handle_request(int clientSocket,struct ParsedRequest* request, char* temp_Request );
+
+int connectRemoteServer(char* host_addr,int port_num ){
+    // Step 1: Create a TCP socket
+    // AF_INET     → IPv4 address family
+    // SOCK_STREAM → TCP socket (reliable, connection-oriented)
+    // 0           → Protocol automatically chosen (TCP for SOCK_STREAM)
+    int remoteSocket = socket(AF_INET,SOCK_STREAM,0);
+    if(remoteSocket < 0){
+        printf("Error in creating the socket\n");
+        return -1;
+    }
+
+    // Step 2: Resolve the hostname to an IP address using DNS
+    // Example: "example.com" → "93.184.216.34"
+    struct hostent* host = gethostbyname(host_addr);
+     if (host == NULL) {
+        printf("DNS resolution failed for host: %s\n", host_addr);
+        close(remoteSocket);
+        return -1; // Cannot resolve hostname
+    }
+
+    // Step 3: Prepare the server address structure for connection
+    struct sockaddr_in server_addr;
+    memset((char*) &server_addr,0,sizeof(server_addr));
+    server_addr.sin_family = AF_INET;               // IPv4
+    server_addr.sin_port = htons(port_num);         // Convert port to network byte order
+    memcpy((char *)host->h_addr_list[0] ,(char*) &server_addr.sin_addr.s_addr, host->h_length); // Copy IP address
+
+    // Step 4: Attempt to connect to the server
+    if (connect(remoteSocket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        printf("Error connecting to server %s:%d\n", host_addr, port_num);
+        close(remoteSocket);
+        return -1; // Connection failed
+    }
+
+    // Step 5: Return the connected socket descriptor
+    return remoteSocket;
+}
+
+
+// int handle_request(int clientSocketId,struct ParsedRequest* request, char* temp_Request ){
+
+//     /*
+    
+//     handle_request() – Process a client HTTP request and forward to server
+//     -----------------------------------------------------------------
+//     Steps:
+//     1. Allocate buffer for building the outgoing HTTP request.
+//     2. Construct the HTTP request line safely using snprintf.
+//     3. Ensure required headers are set:
+//        - Connection: close
+//        - Host: <hostname>
+//     4. Append all headers to the request buffer (unparse headers).
+//     5. Determine target port (default 80 unless specified in request).
+//     6. Connect to the remote server using host and port.
+//     7. Send the complete HTTP request to the remote server.
+//     8. Allocate a temporary buffer to store the full server response for caching.
+//     9. Loop:
+//          a) Receive a chunk from the remote server.
+//          b) Forward the chunk to the client.
+//          c) Append the chunk to the cache buffer.
+//          d) Expand cache buffer if needed.
+//     10. After all data is received, save full response in cache.
+//     11. Free all allocated memory and close the remote server connection.
+//     12. Return success (0) or error (-1).
+//     */
+
+//     // STEP 1: 
+//     char* buf = (char*) malloc(sizeof(char)*MAX_BYTES);
+
+//     if (!buf) return -1;
+    
+//     // older version -> gives error of bounding of buffer memory
+//     // strcpy(buf, "GET");
+//     // strcat(buf, request->path);
+//     // strcat(buf, " ");
+//     // strcat(buf, request->version);
+//     // strcat(buf, "\r\n");
+    
+//     // STEP 2:
+//     // new way to safely construct the request line
+//     int written = snprintf(buf, MAX_BYTES, "GET%s %s\r\n", request->path, request->version);
+//     if (written < 0 || written >= MAX_BYTES) {
+//         fprintf(stderr, "Request line too long\n");
+//         free(buf);
+//         return -1;
+//     }
+//     size_t len = strlen(buf);
+
+//      // STEP 3:
+//     // After this request is done, close the TCP connection
+//     if(ParsedHeader_set(request,"Connection","close")<0){
+//         printf("Set header files are not working");
+//     }
+
+//     // Checks if the Host header is already present
+//     if(ParsedHeader_get(request,"Host")==NULL){
+//         ParsedHeader_set(request,"Host",request->host);
+//     }
+
+//     // STEP 4:
+//     // Takes all the headers stored in request and writes them into the buffer buf starting from buf+len.
+//     // "Unparse" here means convert the internal header representation back into raw HTTP header text like:
+//     // Connection: close\r\n
+//     // Host: example.com\r\n
+//     if(ParsedRequest_unparse_headers(request, buf+len,(size_t)MAX_BYTES-len)<0){
+//         printf("Unparsing failed");
+//     }
+    
+//     // STEP 5:
+//     int port = 80;
+//     if(request->port != NULL){
+//         PORT = atoi(request->port);
+
+//     }
+
+//      // STEP 6:
+//     // create a TCP connection to the given host and port so you can send the request
+//     int remoteSocketId = connectRemoteServer(request->host, PORT);
+//     if (remoteSocketId < 0) {
+//     fprintf(stderr, "Failed to connect to remote server: %s:%d\n", request->host, PORT);
+//     free(buf); // free any allocated resources
+//     return -1; // stop processing, cannot proceed without connection
+//     }
+
+//     // STEP 7:
+//     int bytes_send = send(remoteSocketId,buf,strlen(buf),0);
+//     if (bytes_send < 0) {
+//     perror("Error sending request to remote server");
+//     free(buf);
+//     return -1;
+//     }
+//     memset(buf,0,MAX_BYTES);
+    
+//     // STEP 8:
+//     bytes_send = recv(remoteSocketId,buf,MAX_BYTES-1,0);
+//     char* temp_buffer = (char*) malloc(sizeof(char)* MAX_BYTES);
+//     int temp_buffer_size = MAX_BYTES;
+// 	int temp_buffer_index = 0;
+
+//     // STEP 9:
+//     while(bytes_send > 0)
+// 	{
+// 		bytes_send = send(clientSocketId, buf, bytes_send, 0);
+		
+// 		for(int i=0;i<bytes_send/sizeof(char);i++){
+// 			temp_buffer[temp_buffer_index] = buf[i];
+// 			// printf("%c",buf[i]); // Response Printing
+// 			temp_buffer_index++;
+// 		}
+// 		temp_buffer_size += MAX_BYTES;
+// 		temp_buffer=(char*)realloc(temp_buffer,temp_buffer_size);
+
+// 		if(bytes_send < 0)
+// 		{
+// 			perror("Error in sending data to client socket.\n");
+// 			break;
+// 		}
+// 		memset(buf,0, MAX_BYTES);
+
+// 		bytes_send = recv(remoteSocketId, buf, MAX_BYTES-1, 0);
+
+// 	} 
+//     // STEP 10:
+// 	addNewRequestinCache(temp_buffer, strlen(temp_buffer), temp_Request);
+//     temp_buffer[temp_buffer_index]='\0';
+
+// 	free(buf);
+// 	printf("Done\n");
+// 	free(temp_buffer);
+	
+	
+//  	close(remoteSocketId);
+// 	return 0;
+// }
+
+
+int handle_request(int clientSocketId, struct ParsedRequest* request, char* temp_Request) {
+    /*
+    // used chatgpt to write steps for my code just to understand it more easily 
+    =====================================================================
+    handle_request() – Process a client HTTP request and forward to server
+    =====================================================================
+    Steps:
+    1. Allocate buffer for building the outgoing HTTP request.
+    2. Construct the HTTP request line safely using snprintf.
+    3. Ensure required headers are set:
+       - Connection: close
+       - Host: <hostname>
+    4. Append all headers to the request buffer (unparse headers).
+    5. Determine target port (default 80 unless specified in request).
+    6. Connect to the remote server using host and port.
+    7. Handle connection failure.
+    8. Send the complete HTTP request to the remote server.
+    9. Allocate a temporary buffer to store the full server response for caching.
+    10. Loop:
+         a) Receive a chunk from the remote server.
+         b) Forward the chunk to the client.
+         c) Append the chunk to the cache buffer.
+         d) Expand cache buffer if needed.
+    11. After all data is received, save full response in cache.
+    12. Free all allocated memory and close the remote server connection.
+    13. Return success (0) or error (-1).
+    =====================================================================
+    */
+
+    // STEP 1: Allocate buffer for building the outgoing HTTP request
+    char* buf = (char*) malloc(sizeof(char) * MAX_BYTES);
+    if (!buf) return -1;
+
+    // STEP 2: Construct the HTTP request line safely using snprintf
+    int written = snprintf(buf, MAX_BYTES, "GET%s %s\r\n", request->path, request->version);
+    if (written < 0 || written >= MAX_BYTES) {
+        fprintf(stderr, "Request line too long\n");
+        free(buf);
+        return -1;
+    }
+    size_t len = strlen(buf);
+
+    // STEP 3: Ensure required headers are set: Connection and Host
+    if (ParsedHeader_set(request, "Connection", "close") < 0) {
+        printf("Set header files are not working\n");
+    }
+    if (ParsedHeader_get(request, "Host") == NULL) {
+        ParsedHeader_set(request, "Host", request->host);
+    }
+
+    // STEP 4: Append all headers to the request buffer (unparse headers)
+    if (ParsedRequest_unparse_headers(request, buf + len, (size_t)MAX_BYTES - len) < 0) {
+        printf("Unparsing failed\n");
+    }
+
+    // STEP 5: Determine target port (default 80)
+    int port = 80;
+    if (request->port != NULL) {
+        port = atoi(request->port);
+    }
+
+    // STEP 6: Connect to the remote server using host and port
+    int remoteSocketId = connectRemoteServer(request->host, port);
+
+    // STEP 7: Handle connection failure
+    if (remoteSocketId < 0) {
+        fprintf(stderr, "Failed to connect to remote server: %s:%d\n", request->host, port);
+        free(buf);
+        return -1;
+    }
+
+    // STEP 8: Send the complete HTTP request to the remote server
+    int bytes_sent = send(remoteSocketId, buf, strlen(buf), 0);
+    if (bytes_sent < 0) {
+        perror("Error sending request to remote server");
+        free(buf);
+        close(remoteSocketId);
+        return -1;
+    }
+    memset(buf, 0, MAX_BYTES);
+
+    // STEP 9: Allocate a temporary buffer to store the full server response for caching
+    int bytes_received = recv(remoteSocketId, buf, MAX_BYTES - 1, 0);
+    if (bytes_received < 0) {
+        perror("Error receiving response from remote server");
+        free(buf);
+        close(remoteSocketId);
+        return -1;
+    }
+
+    char* temp_buffer = (char*) malloc(sizeof(char) * MAX_BYTES);
+    if (!temp_buffer) {
+        fprintf(stderr, "Failed to allocate memory for temp_buffer\n");
+        free(buf);
+        close(remoteSocketId);
+        return -1;
+    }
+    int temp_buffer_size = MAX_BYTES;
+    int temp_buffer_index = 0;
+
+    // STEP 10: Loop to receive from remote server, forward to client, and cache
+    while (bytes_received > 0) {
+        // Forward to client
+        int sent_to_client = send(clientSocketId, buf, bytes_received, 0);
+        if (sent_to_client < 0) {
+            perror("Error sending data to client socket");
+            break;
+        }
+
+        // Store in cache buffer
+        for (int i = 0; i < bytes_received; i++) {
+            temp_buffer[temp_buffer_index++] = buf[i];
+        }
+
+        // Expand temp_buffer if needed
+        if (temp_buffer_index + MAX_BYTES > temp_buffer_size) {
+            temp_buffer_size += MAX_BYTES;
+            char* new_buffer = (char*) realloc(temp_buffer, temp_buffer_size);
+            if (!new_buffer) {
+                fprintf(stderr, "Failed to realloc temp_buffer\n");
+                break;
+            }
+            temp_buffer = new_buffer;
+        }
+
+        memset(buf, 0, MAX_BYTES);
+        bytes_received = recv(remoteSocketId, buf, MAX_BYTES - 1, 0);
+        if (bytes_received < 0) {
+            perror("Error receiving response from remote server");
+            break;
+        }
+    }
+
+    // STEP 11: Null-terminate and save full response in cache
+    if (temp_buffer_index < temp_buffer_size) {
+        temp_buffer[temp_buffer_index] = '\0';
+    } else {
+        // Ensure there is space for null terminator
+        char* new_buffer = (char*) realloc(temp_buffer, temp_buffer_size + 1);
+        if (new_buffer) {
+            temp_buffer = new_buffer;
+            temp_buffer[temp_buffer_size] = '\0';
+        }
+    }
+    addNewRequestinCache(temp_buffer, strlen(temp_buffer), temp_Request);
+
+    printf("Done\n");
+
+    // STEP 12: Free allocated memory and close remote connection
+    free(buf);
+    free(temp_buffer);
+    close(remoteSocketId);
+
+    // STEP 13: Return success
+    return 0;
+}
 
 // i used gpt to get this function so that i can send error message if got any error in http status
 void send_error_message(int client_socket, const char* status, const char* message) {
@@ -52,10 +388,7 @@ void send_error_message(int client_socket, const char* status, const char* messa
     send(client_socket, response, strlen(response), 0);
 }
 
-int PORT = 4040; // port no where our proxy will work
-int proxy_socket_Id;  // to maintain the connection we will have to use socket
-pthread_t p_id[MAX_CLIENTS]; // this is the number of threads 
-                            //  for ex -  we can have more than 1 clients who is using this proxy server at same time 
+
 
 // Semaphore to ensure that only MAX_CLIENTS number of clients can be handled concurrently.
 // If more clients try to connect, their threads will wait (block) until a slot is available.
